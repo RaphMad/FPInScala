@@ -1,15 +1,15 @@
 package chapter8
 
-import Gen._
-import Prop._
-import java.util.concurrent.{Executors,ExecutorService}
-import chapter5.Stream
-import chapter6.{SimpleRNG, State, RNG}
-import chapter7.par
-import chapter7.par.Par
+import java.util.concurrent.{ExecutorService, Executors}
 
-import language.postfixOps
-import language.implicitConversions
+import chapter5.Stream
+import chapter6.{RNG, SimpleRNG, State}
+import chapter7.Par
+import chapter7.Par.Par
+import chapter8.Gen._
+import chapter8.Prop._
+
+import scala.language.{implicitConversions, postfixOps}
 
 case class Prop(run: (MaxSize,TestCases,RNG) => Result) {
   def &&(p: Prop) = Prop {
@@ -112,26 +112,26 @@ object Prop {
     }
 
   val ES: ExecutorService = Executors.newCachedThreadPool
-  val p1 = Prop.forAll(Gen.unit(par.unit(1)))(i =>
-    par.map(i)(_ + 1)(ES).get == par.unit(2)(ES).get)
+  val p1 = Prop.forAll(Gen.unit(Par.unit(1)))(i =>
+    Par.map(i)(_ + 1)(ES).get == Par.unit(2)(ES).get)
 
   def check(p: => Boolean): Prop = Prop { (_, _, _) =>
     if (p) Passed else Falsified("()", 0)
   }
 
   val p2 = check {
-    val p = par.map(par.unit(1))(_ + 1)
-    val p2 = par.unit(2)
+    val p = Par.map(Par.unit(1))(_ + 1)
+    val p2 = Par.unit(2)
     p(ES).get == p2(ES).get
   }
 
   def equal[A](p: Par[A], p2: Par[A]): Par[Boolean] =
-    par.map2(p,p2)(_ == _)
+    Par.map2(p,p2)(_ == _)
 
   val p3 = check {
     equal (
-      par.map(par.unit(1))(_ + 1),
-      par.unit(2)
+      Par.map(Par.unit(1))(_ + 1),
+      Par.unit(2)
     ) (ES) get
   }
 
@@ -151,11 +151,11 @@ object Prop {
   def forAllPar3[A](g: Gen[A])(f: A => Par[Boolean]): Prop =
     forAll(S ** g) { case s ** a => f(a)(s).get }
 
-  val pint = Gen.choose(0,10) map (par.unit(_))
+  val pint = Gen.choose(0,10) map (Par.unit(_))
   val p4 =
-    forAllPar(pint)(n => equal(par.map(n)(y => y), n))
+    forAllPar(pint)(n => equal(Par.map(n)(y => y), n))
 
-  val forkProp = Prop.forAllPar(pint2)(i => equal(par.fork(i), i)) tag "fork"
+  val forkProp = Prop.forAllPar(pint2)(i => equal(Par.fork(i), i)) tag "fork"
 }
 
 case class Gen[+A](sample: State[RNG,A]) {
@@ -280,11 +280,14 @@ object Gen {
    * It depends on the `Prop` companion object being created, which references `pint2`.
    */
   lazy val pint2: Gen[Par[Int]] = choose(-100,100).listOfN(choose(0,20)).map(l =>
-    l.foldLeft(par.unit(0))((p,i) =>
-      par.fork { par.map2(p, par.unit(i))(_ + _) }))
+    l.foldLeft(Par.unit(0))((p,i) =>
+      Par.fork { Par.map2(p, Par.unit(i))(_ + _) }))
 
   def genStringIntFn(g: Gen[Int]): Gen[String => Int] =
     g map (i => (s => i))
+
+  def genEndoFn[A](g: Gen[A]): Gen[A => A] =
+    g map (r => (_ => r))
 }
 
 case class SGen[+A](g: Int => Gen[A]) {

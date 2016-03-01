@@ -1,14 +1,12 @@
 package chapter8.exhaustive
 
-import chapter5.Cons
-import chapter5.Stream
-import chapter6.{SimpleRNG, RNG}
+import chapter5.{Cons, Stream}
 import chapter6.RNG.State
-import chapter7.par
-import chapter7.par.Par
+import chapter6.{RNG, SimpleRNG}
+import chapter7.Par
+import chapter7.Par.Par
 
-import language.implicitConversions
-import language.postfixOps
+import scala.language.{implicitConversions, postfixOps}
 
 /*
 This source file contains the answers to the last two exercises in the section
@@ -16,10 +14,11 @@ This source file contains the answers to the last two exercises in the section
 
 The Gen data type in this file incorporates exhaustive checking of finite domains.
 */
-import Gen._
-import Prop._
-import Status._
-import java.util.concurrent.{Executors,ExecutorService}
+import java.util.concurrent.{ExecutorService, Executors}
+
+import chapter8.exhaustive.Gen._
+import chapter8.exhaustive.Prop._
+import chapter8.exhaustive.Status._
 
 
 case class Prop(run: (MaxSize,TestCases,RNG) => Result) {
@@ -125,25 +124,25 @@ object Prop {
   }
 
   val ES: ExecutorService = Executors.newCachedThreadPool
-  val p1 = Prop.forAll(Gen.unit(par.unit(1)))(i =>
-    par.map(i)(_ + 1)(ES).get == par.unit(2)(ES).get)
+  val p1 = Prop.forAll(Gen.unit(Par.unit(1)))(i =>
+    Par.map(i)(_ + 1)(ES).get == Par.unit(2)(ES).get)
 
   def check(p: => Boolean): Prop = // Note that we are non-strict here
     forAll(unit(()))(_ => p)
 
   val p2 = check {
-    val p = par.map(par.unit(1))(_ + 1)
-    val p2 = par.unit(2)
+    val p = Par.map(Par.unit(1))(_ + 1)
+    val p2 = Par.unit(2)
     p(ES).get == p2(ES).get
   }
 
   def equal[A](p: Par[A], p2: Par[A]): Par[Boolean] =
-    par.map2(p,p2)(_ == _)
+    Par.map2(p,p2)(_ == _)
 
   val p3 = check {
     equal (
-      par.map(par.unit(1))(_ + 1),
-      par.unit(2)
+      Par.map(Par.unit(1))(_ + 1),
+      Par.unit(2)
     ) (ES) get
   }
 
@@ -163,11 +162,11 @@ object Prop {
   def forAllPar3[A](g: Gen[A])(f: A => Par[Boolean]): Prop =
     forAll(S ** g) { case s ** a => f(a)(s).get }
 
-  val pint = Gen.choose(0,10) map (par.unit(_))
+  val pint = Gen.choose(0,10) map (Par.unit(_))
   val p4 =
-    forAllPar(pint)(n => equal(par.map(n)(y => y), n))
+    forAllPar(pint)(n => equal(Par.map(n)(y => y), n))
 
-  val forkProp = Prop.forAllPar(pint2)(i => equal(par.fork(i), i)) tag "fork"
+  val forkProp = Prop.forAllPar(pint2)(i => equal(Par.fork(i), i)) tag "fork"
 }
 
 sealed trait Status {}
@@ -396,8 +395,8 @@ object Gen {
    * variation in structure to use for testing.
    */
   lazy val pint2: Gen[Par[Int]] = choose(-100,100).listOfN(choose(0,20)).map(l =>
-    l.foldLeft(par.unit(0))((p,i) =>
-      par.fork { par.map2(p, par.unit(i))(_ + _) }))
+    l.foldLeft(Par.unit(0))((p,i) =>
+      Par.fork { Par.map2(p, Par.unit(i))(_ + _) }))
 
   def genStringIntFn(g: Gen[Int]): Gen[String => Int] =
     g map (i => (s => i))

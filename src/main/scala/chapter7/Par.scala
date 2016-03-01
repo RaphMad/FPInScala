@@ -1,170 +1,180 @@
 package chapter7
 
 import java.util.concurrent._
-import scala.Option._
+import scala.language.implicitConversions
 
-package object par {
 
-   val logger = (message: String) => println("log @" + new java.text.SimpleDateFormat("ss.SSS").format(new java.util.Date()) + ": " + message)
-   // val logger = (message: String) => Unit
+object Par {
+  type Par[A] = ExecutorService => Future[A]
 
-   type Par[A] = ExecutorService => Future[A]
+  def run[A](s: ExecutorService)(a: Par[A]): Future[A] = a(s)
 
-   def run[A](s: ExecutorService)(a: Par[A]): Future[A] = a(s)
+  def unit[A](a: A): Par[A] = (es: ExecutorService) => UnitFuture(a) // `unit` is represented as a function that returns a `UnitFuture`, which is a simple implementation of `Future` that just wraps a constant value. It doesn't use the `ExecutorService` at all. It's always done and can't be cancelled. Its `get` method simply returns the value that we gave it.
 
-   def unit[A](a: A): Par[A] = (es: ExecutorService) => UnitFuture(a)
+  private case class UnitFuture[A](get: A) extends Future[A] {
+    def isDone = true
+    def get(timeout: Long, units: TimeUnit) = get
+    def isCancelled = false
+    def cancel(evenIfRunning: Boolean): Boolean = false
+  }
 
-   def lazyUnit[A](a: => A): Par[A] = fork(unit(a))
+  def map2[A,B,C](a: Par[A], b: Par[B])(f: (A,B) => C): Par[C] = // `map2` doesn't evaluate the call to `f` in a separate logical thread, in accord with our design choice of having `fork` be the sole function in the API for controlling parallelism. We can always do `fork(map2(a,b)(f))` if we want the evaluation of `f` to occur in a separate thread.
+    (es: ExecutorService) => {
+      val af = a(es)
+      val bf = b(es)
+      UnitFuture(f(af.get, bf.get)) // This implementation of `map2` does _not_ respect timeouts. It simply passes the `ExecutorService` on to both `Par` values, waits for the results of the Futures `af` and `bf`, applies `f` to them, and wraps them in a `UnitFuture`. In order to respect timeouts, we'd need a new `Future` implementation that records the amount of time spent evaluating `af`, then subtracts that time from the available time allocated for evaluating `bf`.
+    }
 
-   private case class UnitFuture[A](get: A) extends Future[A] {
+  def fork[A](a: => Par[A]): Par[A] = // This is the simplest and most natural implementation of `fork`, but there are some problems with it--for one, the outer `Callable` will block waiting for the "inner" task to complete. Since this blocking occupies a thread in our thread pool, or whatever resource backs the `ExecutorService`, this implies that we're losing out on some potential parallelism. Essentially, we're using two threads when one should suffice. This is a symptom of a more serious problem with the implementation, and we will discuss this later in the chapter.
+    es => es.submit(new Callable[A] {
+      def call = a(es).get
+    })
 
-      // constructor parameter 'get' implicitly creates a field called 'get'
-      // it seems that this field is used for the implementation of 'Future.get()' (without parameters)
+  def lazyUnit[A](a: => A): Par[A] = fork(unit(a))
 
-      def get(timeout: Long, units: TimeUnit) = get
+  def asyncF[A,B](f: A => B): A => Par[B] =
+    a => lazyUnit(f(a))
 
-      def isDone = true
-      def isCancelled = false
-      def cancel(evenIfRunning: Boolean): Boolean = false
-   }
+  def map[A,B](pa: Par[A])(f: A => B): Par[B] =
+    map2(pa, unit(()))((a,_) => f(a))
 
-   def map2[A, B, C](a: Par[A], b: Par[B])(f: (A, B) => C): Par[C] =
+  def sortPar(parList: Par[List[Int]]) = map(parList)(_.sorted)
 
-      (es: ExecutorService) => {
+  def sequence_simple[A](l: List[Par[A]]): Par[List[A]] =
+    l.foldRight[Par[List[A]]](unit(List()))((h,t) => map2(h,t)(_ :: _))
 
-         val af = a(es)
-         val bf = b(es)
+  // This implementation forks the recursive step off to a new logical thread,
+  // making it effectively tail-recursive. However, we are constructing
+  // a right-nested parallel program, and we can get better performance by
+  // dividing the list in half, and running both halves in parallel.
+  // See `sequenceBalanced` below.
+  def sequenceRight[A](as: List[Par[A]]): Par[List[A]] =
+    as match {
+      case Nil => unit(Nil)
+      case h :: t => map2(h, fork(sequence(t)))(_ :: _)
+    }
 
-         UnitFuture(f(af.get, bf.get))
-      }
+  // We define `sequenceBalanced` using `IndexedSeq`, which provides an
+  // efficient function for splitting the sequence in half.
+  def sequenceBalanced[A](as: IndexedSeq[Par[A]]): Par[IndexedSeq[A]] = fork {
+    if (as.isEmpty) unit(Vector())
+    else if (as.length == 1) map(as.head)(a => Vector(a))
+    else {
+      val (l,r) = as.splitAt(as.length/2)
+      map2(sequenceBalanced(l), sequenceBalanced(r))(_ ++ _)
+    }
+  }
 
-   def map[A, B](pa: Par[A])(f: A => B): Par[B] =
-      map2(pa, unit(()))((a, _) => f(a))
+  def sequence[A](as: List[Par[A]]): Par[List[A]] =
+    map(sequenceBalanced(as.toIndexedSeq))(_.toList)
 
-   def flatMap[A, B](pa: Par[A])(f: A => Par[B]): Par[B] = {
-      val result = map(pa)(f)
-      join(result)
-   }
+  def parFilter[A](l: List[A])(f: A => Boolean): Par[List[A]] = {
+    val pars: List[Par[List[A]]] =
+      l map (asyncF((a: A) => if (f(a)) List(a) else List()))
+    map(sequence(pars))(_.flatten) // convenience method on `List` for concatenating a list of lists
+  }
 
-   def join[A](pa: Par[Par[A]]): Par[A] = es => {
-      val result = pa(es).get
-      result(es)
-   }
+  def equal[A](e: ExecutorService)(p: Par[A], p2: Par[A]): Boolean =
+    p(e).get == p2(e).get
 
-   def joinViaFlatMap[A](ppa: Par[Par[A]]): Par[A] = flatMap(ppa)(pa => pa)
+  def delay[A](fa: => Par[A]): Par[A] =
+    es => fa(es)
 
-   // runs a, then b!
-   def map2Serial[A, B, C](pa: Par[A], pb: Par[B])(f: (A, B) => C): Par[C] = flatMap(pa)(a => flatMap(pb)(b => unit(f(a, b))))
-   def map2Serial2[A, B, C](pa: Par[A], pb: Par[B])(f: (A, B) => C): Par[C] = flatMap(pa)(a => map(pb)(b => f(a, b)))
+  def choice[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] =
+    es =>
+      if (run(es)(cond).get) t(es) // Notice we are blocking on the result of `cond`.
+      else f(es)
 
-   def fork[A](a: => Par[A]): Par[A] = es => {
+  def choiceN[A](n: Par[Int])(choices: List[Par[A]]): Par[A] =
+    es => {
+      val ind = run(es)(n).get // Full source files
+      run(es)(choices(ind))
+    }
 
-      val parent = Thread.currentThread().getName()
+  def choiceViaChoiceN[A](a: Par[Boolean])(ifTrue: Par[A], ifFalse: Par[A]): Par[A] =
+    choiceN(map(a)(b => if (b) 0 else 1))(List(ifTrue, ifFalse))
 
-      es.submit(new Callable[A] {
-         def call = {
+  def choiceMap[K,V](key: Par[K])(choices: Map[K,Par[V]]): Par[V] =
+    es => {
+      val k = run(es)(key).get
+      run(es)(choices(k))
+    }
 
-            val child = Thread.currentThread().getName
-            logger(s"spawned '$child' from '$parent', start calculation")
+  def chooser[A,B](p: Par[A])(choices: A => Par[B]): Par[B] =
+    es => {
+      val k = run(es)(p).get
+      run(es)(choices(k))
+    }
 
-            val result = a(es).get
-            logger(s"finished '$child' with result '$result'")
+  /* `chooser` is usually called `flatMap` or `bind`. */
+  def flatMap[A,B](p: Par[A])(choices: A => Par[B]): Par[B] =
+    es => {
+      val k = run(es)(p).get
+      run(es)(choices(k))
+    }
 
-            result
-         }
-      })
-   }
+  def parMap[A, B](ps: List[A])(f: A => B): Par[List[B]] = fork {
+    val fbs: List[Par[B]] = ps.map(asyncF(f))
+    sequence(fbs)
+  }
 
-   def delay[A](fa: => Par[A]): Par[A] =
-      es => fa(es)
+  def countWords(paragraphs: List[String]): Par[Int] = {
 
-   def asyncF[A, B](f: A => B): A => Par[B] = a => lazyUnit(f(a))
+    val words = parMap(paragraphs)(x => x.split(" ").length)
+    flatMap(words)(x => sum(x.toIndexedSeq))
+  }
 
-   def sequence[A](ps: List[Par[A]]): Par[List[A]] =
-      ps.foldRight[Par[List[A]]](unit(List()))((x, acc) => map2(x, acc)(_ :: _))
+  def sum(ints: IndexedSeq[Int]): Par[Int] =
+    if (ints.length <= 1)
+      unit(ints.headOption getOrElse 0)
+    else {
+      val (l, r) = ints.splitAt(ints.length / 2)
+      map2(fork(sum(l)), fork(sum(r)))(_ + _)
+    }
 
-   def parMap[A, B](ps: List[A])(f: A => B): Par[List[B]] = fork {
-      val fbs: List[Par[B]] = ps.map(asyncF(f))
-      sequence(fbs)
-   }
+  def max(ints: IndexedSeq[Int])(forkUntil: Integer): Par[Int] = fold(ints)(Math.max, 0)(forkUntil)
 
-   def parFilterNaive[A](as: List[A])(f: A => Boolean): Par[List[A]] = asyncF(as.filter)(f)
+  def fold[A](seq: IndexedSeq[A])(f: (A, A) => A, default: A)(forkUntil: Integer): Par[A] =
+    if (seq.length <= 1)
+      unit(seq.headOption getOrElse default)
+    else {
+      val (l, r) = seq.splitAt(seq.length / 2)
+      if (seq.length > forkUntil)
+        map2(fork(fold(l)(f, default)(forkUntil)), fork(fold(r)(f, default)(forkUntil)))(f)
+      else
+        map2(fold(l)(f, default)(forkUntil), fold(r)(f, default)(forkUntil))(f)
+    }
 
-   def parFilter[A](as: List[A])(f: A => Boolean): Par[List[A]] = fork {
+  def choiceViaFlatMap[A](p: Par[Boolean])(f: Par[A], t: Par[A]): Par[A] =
+    flatMap(p)(b => if (b) t else f)
 
-      val listOfParOfOptions = as.map(asyncF(a => if (f(a)) Some(a) else None))
-      val parOfListOfOptions = sequence(listOfParOfOptions)
+  def choiceNViaFlatMap[A](p: Par[Int])(choices: List[Par[A]]): Par[A] =
+    flatMap(p)(i => choices(i))
 
-      // map() is Par.map()
-      // flatten() transforms lists of lists into single lists by concat-ing them
-      // it also works for a lists of Options since Options can behave as empty or 1-element lists via its GenTraversable implementation
-      map(parOfListOfOptions)(xs => xs.flatten)
+  // see nonblocking implementation in `Nonblocking.scala`
+  def join[A](a: Par[Par[A]]): Par[A] =
+    es => run(es)(run(es)(a).get())
 
-      // alternative implementations:
-      // map(parOfListOfOptions)(xs => xs.flatMap(x => x))
-      // map(parOfListOfOptions)(xs => xs.filter(x => x.isDefined).map(x => x.get))
-   }
+  def joinViaFlatMap[A](a: Par[Par[A]]): Par[A] =
+    flatMap(a)(x => x)
 
-   def sum(ints: IndexedSeq[Int]): Par[Int] =
-      if (ints.length <= 1)
-         unit(ints.headOption getOrElse 0)
-      else {
-         val (l, r) = ints.splitAt(ints.length / 2)
-         map2(fork(sum(l)), fork(sum(r)))(_ + _)
-      }
+  def flatMapViaJoin[A,B](p: Par[A])(f: A => Par[B]): Par[B] =
+    join(map(p)(f))
+  /* Gives us infix syntax for `Par`. */
+  implicit def toParOps[A](p: Par[A]): ParOps[A] = new ParOps(p)
 
-   def fold[A](seq: IndexedSeq[A])(f: (A, A) => A, default: A)(forkUntil: Integer): Par[A] =
-      if (seq.length <= 1)
-         unit(seq.headOption getOrElse default)
-      else {
-         val (l, r) = seq.splitAt(seq.length / 2)
-         if (seq.length > forkUntil)
-            map2(fork(fold(l)(f, default)(forkUntil)), fork(fold(r)(f, default)(forkUntil)))(f)
-         else
-            map2(fold(l)(f, default)(forkUntil), fold(r)(f, default)(forkUntil))(f)
-      }
+  class ParOps[A](p: Par[A]) {
 
-   def max(ints: IndexedSeq[Int])(forkUntil: Integer): Par[Int] = fold(ints)(Math.max, 0)(forkUntil)
-
-   def countWords(paragraphs: List[String]): Par[Int] = {
-
-      val words = parMap(paragraphs)(x => x.split(" ").length)
-      flatMap(words)(x => sum(x.toIndexedSeq))
-   }
-
-   def map3ViaFlatMap[A, B, C, D](a: Par[A], b: Par[B], c: Par[C])(f: (A, B, C) => D): Par[D] =
-      flatMap(a)(va => flatMap(b)(vb => map(c)(vc => f(va, vb, vc))))
-
-   def map3[A, B, C, D](a: Par[A], b: Par[B], c: Par[C])(f: (A, B, C) => D): Par[D] = {
-
-      val curriedFunction = f.curried
-
-      val intermediate = map2(a, b)((a, b) => curriedFunction(a)(b))
-      map2(intermediate, c)((function, c) => function(c))
-   }
-
-   def map3Compact[A, B, C, D](a: Par[A], b: Par[B], c: Par[C])(f: (A, B, C) => D): Par[D] = map2(map2(a, b)(f.curried(_)(_)), c)(_.apply(_))
-
-   def map4Compact[A, B, C, D, E](a: Par[A], b: Par[B], c: Par[C], d: Par[D])(f: (A, B, C, D) => E): Par[E] =
-      map2(map2(map2(a, b)(f.curried(_)(_)), c)(_.apply(_)), d)(_.apply(_))
-
-   def map5Compact[A, B, C, D, E, F](a: Par[A], b: Par[B], c: Par[C], d: Par[D], e: Par[E])(f: (A, B, C, D, E) => F): Par[F] =
-      map2(map2(map2(map2(a, b)(f.curried(_)(_)), c)(_.apply(_)), d)(_.apply(_)), e)(_.apply(_))
-
-   def choiceN[A](n: Par[Int])(choices: List[Par[A]]): Par[A] = es =>
-      {
-         val index = run(es)(n).get
-         choices(index)(es)
-      }
-
-   def choice[A](cond: Par[Boolean])(t: Par[A], f: Par[A]): Par[A] = choiceN(map(cond)(v => if (v) 0 else 1))(List(t, f))
-
-   def choiceMap[K, V](key: Par[K])(choices: Map[K, Par[V]]): Par[V] = es =>
-      {
-         val computedKey = run(es)(key).get
-         choices(computedKey)(es)
-      }
-
-   def chooser[A, B](pa: Par[A])(choices: A => Par[B]): Par[B] = flatMap(pa)(choices)
-
+  }
 }
+
+object Examples {
+  def sum(ints: IndexedSeq[Int]): Int = // `IndexedSeq` is a superclass of random-access sequences like `Vector` in the standard library. Unlike lists, these sequences provide an efficient `splitAt` method for dividing them into two parts at a particular index.
+    if (ints.size <= 1)
+      ints.headOption getOrElse 0 // `headOption` is a method defined on all collections in Scala. We saw this function in chapter 3.
+    else {
+      val (l,r) = ints.splitAt(ints.length/2) // Divide the sequence in half using the `splitAt` function.
+      sum(l) + sum(r) // Recursively sum both halves and add the results together.
+    }
+}
+

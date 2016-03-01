@@ -1,0 +1,10 @@
+# scala specific
+target
+*.class
+
+# IntelliJ IDEA specific
+*.iml
+*.ipr
+*.iws
+.idea
+out

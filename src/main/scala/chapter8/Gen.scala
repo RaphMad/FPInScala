@@ -286,7 +286,7 @@ object Gen {
   def genStringIntFn(g: Gen[Int]): Gen[String => Int] =
     g map (i => (s => i))
 
-  def genEndoFn[A](g: Gen[A]): Gen[A => A] =
+  def genConstFn[A, B](g: Gen[B]): Gen[A => B] =
     g map (r => (_ => r))
 }
 

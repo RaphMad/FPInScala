@@ -1,8 +1,8 @@
 package chapter10
 
-import chapter10.Monoid._
 import chapter8.Prop._
 import chapter8._
+import SampleMonoids._
 
 object MonoidSpec {
 
@@ -15,9 +15,11 @@ object MonoidSpec {
     forAll(tripleGen) { case (x, y, z) => m.op(x, m.op(y, z)) == m.op(m.op(x, y), z) }
   }
 
-  def id[A](m: Monoid[A], gen: Gen[A]): Prop = forAll(gen)((a: A) => m.op(a, m.zero) == a && m.op(m.zero, a) == a)
+  def id[A](m: Monoid[A], gen: Gen[A]): Prop =
+    forAll(gen)((a: A) => m.op(a, m.zero) == a && m.op(m.zero, a) == a)
 
-  def monoidLaws[A](m: Monoid[A], gen: Gen[A]): Prop = assoc(m, gen) && id(m, gen)
+  def monoidLaws[A](m: Monoid[A], gen: Gen[A]): Prop =
+    assoc(m, gen) && id(m, gen)
 
   def main(args: Array[String]): Unit = {
     stringMonoid_ShouldSatisfyLaws()
@@ -67,15 +69,14 @@ object MonoidSpec {
   }
 
   def endoMonoid_ShouldSatisfyLaws(): Unit = {
-    // functions cannot be compared (they will reference different functions that actually _DO_ the same)
-    // val functionGen = Gen.genEndoFn(Gen.choose(1, 1000))
+    // functions cannot be compared (they will _DO_ the same but still be different references)
+    // val functionGen = Gen.genConstFn(Gen.choose(1, 1000))
     // run(monoidLaws(endoMonoid[Int], functionGen))
 
-    // but we do some testing with concrete functions and feeding values
+    // but we can do some (non-conclusive) testing by feeding values to concrete functions
     val f1 = (a: Int) => a + 1
     val f2 = (a: Int) => a + a
     val f3 = (a: Int) => 10 * a
-    val paramGen = Gen.choose(1, 1000)
 
     val assoc = forAll(Gen.choose(1, 1000)) { x =>
       endoMonoid.op(f1, endoMonoid.op(f2, f3))(x) == endoMonoid.op(endoMonoid.op(f1, f2), f3)(x)

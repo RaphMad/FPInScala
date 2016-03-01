@@ -1,5 +1,5 @@
-import chapter10.Monoid
-import Monoid._
+import chapter10._
+import SampleMonoids._
 
 stringMonoid.op("howdy", "ho")
 

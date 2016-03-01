@@ -1,0 +1,25 @@
+START: map(y)(id) == y
+GOAL:  map(map(y)(g))(f) == map(y)(f compose g)
+
+
+map(y)(id) == y
+
+-- substitute 'y' with 'map(x)(g)'
+
+map(map(x)(g))(id) == map(x)(g)
+
+-- substitute 'x' with 'y'
+
+map(map(y)(g))(id) == map(y)(g)
+
+-- 'complicate'
+
+
+map(map(y)(g))(id) == map(y)(id compose g)
+
+map(map(y)(g))(f) == map(y)(f compose g)
+
+
+join x = flatmap(x)(id)
+
+map(x)(f) = flatmap(x)(unit compose f) ?????

@@ -1,4 +1,4 @@
-package chapter8
+/*package chapter8
 
 import chapter5._
 import chapter6._
@@ -123,4 +123,4 @@ object Prop {
    type Result = Option[(FailedCase, SuccessCount)]
    type FailedCase = String
    type SuccessCount = Int
-}
+}*/

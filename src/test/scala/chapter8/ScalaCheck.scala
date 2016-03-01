@@ -1,7 +1,7 @@
 package chapter8
 
 import org.scalacheck.Properties
-import org.scalacheck.Prop.{ forAll, BooleanOperators }
+import org.scalacheck.Prop.forAll
 
 object ListSpecification extends Properties("List") {
 

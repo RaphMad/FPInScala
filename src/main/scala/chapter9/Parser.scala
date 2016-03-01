@@ -1,9 +1,5 @@
 package chapter9
 
-import org.scalacheck.Gen
-import org.scalacheck.Prop
-import org.scalacheck.Prop.{ forAll, BooleanOperators }
-
 trait Parser[A]
 trait ParseError
 
@@ -47,14 +43,5 @@ trait Parsers[ParseError, Parser[+_]] { self =>
 
       def **[B >: A](p2: Parser[B]): Parser[(A, B)] = self.product(p, p2)
       def product[B >: A](p2: => Parser[B]): Parser[(A, B)] = self.product(p, p2)
-   }
-
-   object Laws {
-
-      def equal[A](p1: Parser[A], p2: Parser[A])(in: Gen[String]): Prop =
-         forAll(in)(s => run(p1)(s) == run(p2)(s))
-
-      def mapLaw[A](p: Parser[A])(in: Gen[String]): Prop =
-         equal(p, p.map(a => a))(in)
    }
 }

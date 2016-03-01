@@ -120,10 +120,10 @@ class ParSpec extends FlatSpec with Matchers with BeforeAndAfter with Timeouts {
       val parComputation = max(list)(1000000)
 
       // a serial filter would need about 25s (~250ms per item)
-      failAfter(10 seconds) {
+      failAfter(20 seconds) {
          val time = System.nanoTime()
          runWithThreadPool(parComputation)
-         println("Time elapsed: " + TimeUnit.NANOSECONDS.toMillis((System.nanoTime() - time)))
+         println("Time elapsed: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - time))
       }
    }
 
@@ -134,7 +134,7 @@ class ParSpec extends FlatSpec with Matchers with BeforeAndAfter with Timeouts {
       val time = System.nanoTime()
       list.max
 
-      println("Time elapsed: " + TimeUnit.NANOSECONDS.toMillis((System.nanoTime() - time)))
+      println("Time elapsed: " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - time))
    }
 
    it should "count words correctly" in {
@@ -143,7 +143,7 @@ class ParSpec extends FlatSpec with Matchers with BeforeAndAfter with Timeouts {
          "Fusce dignissim eros a nulla convallis lacinia. Nulla sit amet tempus neque. Mauris vehicula elit sed est egestas, ut interdum ex dictum. Aliquam ut bibendum felis. Nulla fringilla, dolor at pellentesque tincidunt, lectus sapien facilisis est, in ullamcorper lacus turpis sed nisl. Sed quam sapien, posuere eget consequat ac, pulvinar quis tortor. Donec risus purus, tempus at condimentum ut, laoreet eu orci. Vestibulum ac nisl non leo molestie cursus ac id urna. Pellentesque placerat id nulla sit amet aliquet. Maecenas viverra augue felis, sit amet molestie sapien venenatis a. Integer facilisis tellus vitae diam posuere, aliquam ornare ligula malesuada. Nam eget ipsum sit amet quam commodo venenatis. Duis urna elit, laoreet ut consectetur id, blandit quis felis.",
          "Vestibulum ac pellentesque nibh. Donec vehicula leo nec faucibus mattis. In hac habitasse platea dictumst. Donec auctor, sapien ut scelerisque viverra, lectus nisl commodo dui, vitae posuere libero arcu a nulla. Vivamus tincidunt lorem eget leo porttitor, sit amet sagittis justo iaculis. Phasellus eget sem tempor, auctor odio interdum, molestie purus. Suspendisse sit amet pellentesque nibh. Curabitur feugiat sed augue a vehicula. Vivamus laoreet, lorem at maximus euismod, mi orci mollis enim, ac faucibus tortor dui ut ipsum. In hac habitasse platea dictumst. Fusce aliquet a nulla nec tempus. Curabitur ac eros quis tortor tincidunt faucibus. Sed ligula ipsum, tempus ac mi id, ultrices efficitur velit. Aliquam erat volutpat.",
          "Donec facilisis, velit vel consectetur dignissim, quam orci egestas turpis, et efficitur ipsum lectus sed lorem. Cras ornare lacus vitae enim pharetra molestie. Etiam placerat efficitur eros in rhoncus. Curabitur id magna at augue molestie pulvinar. Praesent aliquet turpis non vestibulum fringilla. Proin pharetra tortor mattis enim venenatis, et tincidunt purus suscipit. Vestibulum quis malesuada ex. Nunc turpis turpis, tristique non mattis id, tristique at nunc. Quisque quis elit nisl. Aliquam ut magna a lacus finibus tincidunt. Donec venenatis nec ante sit amet euismod. Phasellus facilisis sit amet nunc quis imperdiet. Ut sit amet dui turpis. Vivamus ac dui ut sem pharetra lacinia sed id justo. Etiam placerat quam turpis. Nunc sed mi ex.",
-         "Nam id lorem a eros rhoncus varius sit amet mollis tortor. Mauris vitae tortor elementum, egestas risus quis, euismod justo. Vestibulum id velit arcu. Morbi efficitur felis ut erat sollicitudin, non elementum metus imperdiet. Nullam massa magna, mollis id sagittis at, ultricies sit amet ante. Cras bibendum nec purus tincidunt malesuada. Donec odio velit, rhoncus non dolor vel, egestas vulputate dui. Sed at auctor diam. Fusce in orci est. Nunc porta molestie elit, eget efficitur justo blandit id.");
+         "Nam id lorem a eros rhoncus varius sit amet mollis tortor. Mauris vitae tortor elementum, egestas risus quis, euismod justo. Vestibulum id velit arcu. Morbi efficitur felis ut erat sollicitudin, non elementum metus imperdiet. Nullam massa magna, mollis id sagittis at, ultricies sit amet ante. Cras bibendum nec purus tincidunt malesuada. Donec odio velit, rhoncus non dolor vel, egestas vulputate dui. Sed at auctor diam. Fusce in orci est. Nunc porta molestie elit, eget efficitur justo blandit id.")
 
       val computation = countWords(text)
       val result = runWithThreadPool(computation)

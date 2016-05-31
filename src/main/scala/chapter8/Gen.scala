@@ -242,6 +242,9 @@ object Gen {
   def stringN(n: Int): Gen[String] =
     listOfN(n, choose(0,127)).map(_.map(_.toChar).mkString)
 
+  def stringNoSpaceN(n: Int): Gen[String] =
+    listOfN(n, choose(65,90)).map(_.map(_.toChar).mkString)
+
   val string: SGen[String] = SGen(stringN)
 
   implicit def unsized[A](g: Gen[A]): SGen[A] = SGen(_ => g)

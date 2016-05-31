@@ -1,5 +1,8 @@
 package chapter10
 
+import java.util.concurrent.Executors
+
+import chapter7.Nonblocking.Par
 import chapter8.Prop._
 import chapter8._
 import SampleMonoids._
@@ -7,11 +10,18 @@ import SampleMonoids._
 object MonoidSpec {
 
   def assoc[A](m: Monoid[A], gen: Gen[A]): Prop = {
-    val tripleGen =
+    /*val tripleGen =
       gen flatMap (x =>
         gen flatMap (y =>
           gen map (z =>
-            (x, y, z))))
+            (x, y, z))))*/
+
+    val tripleGen = for {
+      x <- gen
+      y <- gen
+      z <- gen
+    } yield (x, y, z)
+
     forAll(tripleGen) { case (x, y, z) => m.op(x, m.op(y, z)) == m.op(m.op(x, y), z) }
   }
 
@@ -22,7 +32,7 @@ object MonoidSpec {
     assoc(m, gen) && id(m, gen)
 
   def main(args: Array[String]): Unit = {
-    stringMonoid_ShouldSatisfyLaws()
+    /*stringMonoid_ShouldSatisfyLaws()
 
     listMonoid_ShouldSatisfyLaws()
 
@@ -35,6 +45,17 @@ object MonoidSpec {
     optionMonoid_ShouldSatisfyLaws()
 
     endoMonoid_ShouldSatisfyLaws()
+
+    parMap_ShouldWorkInParallel()*/
+
+    wcMonoid_ShouldSatisfyLaws()
+
+    /*simpleOrderMonoid_ShouldSatisfyLaws()
+    simpleOrderMonoid_ShouldSatisfyIdLaws()
+    simpleOrderMonoid_ShouldSatisfyAssocLaws()*/
+    //exampleOrderMonoid_ShouldSatisfyLaws()
+
+    //productMonoid_ShouldSatisfyLaws()
   }
 
   def stringMonoid_ShouldSatisfyLaws(): Unit = {
@@ -47,11 +68,11 @@ object MonoidSpec {
   }
 
   def intAdditionMonoid_ShouldSatisfyLaws(): Unit = {
-    run(monoidLaws(intAddition, Gen.choose(1, 1000)))
+    run(monoidLaws(intAddition, Gen.choose(-1000, 1000)))
   }
 
   def intMultiplicationMonoid_ShouldSatisfyLaws(): Unit = {
-    run(monoidLaws(intMultiplication, Gen.choose(1, 1000)))
+    run(monoidLaws(intMultiplication, Gen.choose(-1000, 1000)))
   }
 
   def booleanOrMonoid_ShouldSatisfyLaws(): Unit = {
@@ -66,6 +87,47 @@ object MonoidSpec {
     val justIntGen = Gen.choose(1, 1000).map(i => Some(i))
     val optionGen = Gen.weighted((justIntGen, 50), (Gen.unit(None), 50))
     run(monoidLaws(optionMonoid[Int], optionGen))
+  }
+
+  def exampleOrderMonoid_ShouldSatisfyLaws(): Unit = {
+    val tripleGen = for {
+      x <- Gen.choose(1, 1000)
+      y <- Gen.choose(1, 1000)
+      z <- Gen.boolean
+    } yield Some(x, y, z)
+
+    val gen = Gen.weighted((tripleGen, 80), (Gen.unit(None), 20))
+    run(monoidLaws(exampleOrderMonoid, gen))
+  }
+
+  def simpleOrderMonoid_ShouldSatisfyLaws(): Unit = {
+    val tripleGen = for {
+      x <- Gen.choose(1, 1000)
+      y <- Gen.boolean
+    } yield Some(x, y)
+
+    val gen = Gen.weighted((tripleGen, 80), (Gen.unit(None), 20))
+    run(monoidLaws(simpleOrderMonoid, gen))
+  }
+
+  def simpleOrderMonoid_ShouldSatisfyIdLaws(): Unit = {
+    val tripleGen = for {
+      x <- Gen.choose(1, 1000)
+      y <- Gen.boolean
+    } yield Some(x, y)
+
+    val gen = Gen.weighted((tripleGen, 80), (Gen.unit(None), 20))
+    run(id(simpleOrderMonoid, gen))
+  }
+
+  def simpleOrderMonoid_ShouldSatisfyAssocLaws(): Unit = {
+    val tripleGen = for {
+      x <- Gen.choose(1, 1000)
+      y <- Gen.boolean
+    } yield Some(x, y)
+
+    val gen = Gen.weighted((tripleGen, 80), (Gen.unit(None), 20))
+    run(assoc(simpleOrderMonoid, gen))
   }
 
   def endoMonoid_ShouldSatisfyLaws(): Unit = {
@@ -87,5 +149,41 @@ object MonoidSpec {
     }
 
     run(assoc && id)
+  }
+
+  def parMap_ShouldWorkInParallel(): Unit = {
+    val list = IndexedSeq.fill(100)("2")
+
+    // val result = Monoid.parFoldMap4(list, SampleMonoids.intMultiplication)(Integer.parseInt)
+    val result = Monoid.parFoldMap6(list, SampleMonoids.intMultiplication)(Integer.parseInt)
+    println("Result is: " + Par.run(Executors.newCachedThreadPool())(result))
+  }
+
+  def wcMonoid_ShouldSatisfyLaws(): Unit = {
+
+    val noSpaceString = Gen.stringNoSpaceN(10)
+    val emptyStringGen = Gen.unit("").unsized.apply(5)
+
+    val stubGen = Gen.weighted((emptyStringGen, 20), (noSpaceString, 80)) map (s => Stub(s))
+
+    val partStringGen = Gen.weighted((emptyStringGen, 50), (noSpaceString, 50))
+    val partGen = for {
+      l <- partStringGen
+      n <- Gen.smallInt
+      r <- partStringGen
+    } yield Part(l, n, r)
+
+    val wcGen = Gen.weighted((stubGen, 50), (partGen, 50))
+    run(monoidLaws(wcMonoid, wcGen))
+  }
+
+  def productMonoid_ShouldSatisfyLaws(): Unit = {
+    val productMonoid = Monoid.productMonoid(intAddition, booleanAnd);
+    val gen = for {
+      x <- Gen.choose(-1000, 1000)
+      y <- Gen.boolean
+    } yield (x, y)
+
+    run(monoidLaws(productMonoid, gen))
   }
 }

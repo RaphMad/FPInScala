@@ -18,7 +18,27 @@ trait Monad[M[_]] extends Functor[M] {
   def sequence[A](lma: List[M[A]]): M[List[A]] =
     lma.foldRight(unit(List(): List[A]))((ma, mla) => map2(ma, mla)((a, la) => a :: la))
 
-  def traverse[A, B](la: List[A])(f: A => M[B]): M[List[B]] = ???
+  def traverse[A, B](la: List[A])(f: A => M[B]): M[List[B]] = sequence(la map f)
+
+  def replicateM[A](n: Int, ma: M[A]): M[List[A]] = n match {
+    case 0 => unit(List[A]())
+    case n => map2(ma, replicateM(n - 1, ma))(_ :: _)
+  }
+
+  def product[A, B](ma: M[A], mb: M[B]): M[(A, B)] = map2(ma, mb)((_, _))
+
+  def filterM[A](as: List[A])(f: A => M[Boolean]): M[List[A]] =
+    as.foldRight(unit(List(): List[A]))((a, mla) => map2(f(a), mla)((p, la) => if (p) a :: la else la))
+
+  def compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a => flatMap(f(a))(g)
+
+  def flatMapViaCompose[A, B](ma: M[A])(f: A => M[B]): M[B] = compose(identity[M[A]], f)(ma)
+
+  def join[A](mma: M[M[A]]): M[A] = flatMap(mma)(identity[M[A]])
+
+  def flatMapViaJoinAndMap[A, B](ma: M[A])(f: A => M[B]): M[B] = join(map(ma)(f))
+
+  def composeViaJoinAndMap[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a => join(map(f(a))(g))
 }
 
 object SampleMonads {

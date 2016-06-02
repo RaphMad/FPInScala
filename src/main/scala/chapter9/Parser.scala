@@ -3,7 +3,6 @@ package chapter9
 import scala.language.{higherKinds, implicitConversions}
 
 trait Parser[A]
-
 trait ParseError
 
 trait Parsers[ParseError, Parser[+ _]] {

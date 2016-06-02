@@ -1,0 +1,66 @@
+11.9:
+
+Definition:
+def compose[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a => flatMap(f(a))(g)
+
+compose(compose(f, g), h) == compose(f, compose(g, h))
+
+-> definition of compose (inner):
+compose(a => flatMap(f(a), g), h) == compose(f, a => flatMap(g(a), h)
+
+-> definition of compose (outer):
+b => flatMap(a => flatMap(f(a)(b), g), h) == b => flatMap(f(b), a => flatMap(g(a), h)
+
+-> simplify
+b => flatMap(flatMap(f(b), g), h) == b => flatMap(f(b), a => flatMap(g(a), h)
+
+-> replace 'f(b)' with 'x' and eliminate the 'b' argument (WHY?)
+flatMap(flatMap(x, g), h) == flatMap(x, a => flatMap(g(a), h)
+
+-> rename g <-> f, h <-> g
+flatMap(flatMap(x, f), g) == flatMap(x, a => flatMap(f(a), g)
+
+
+11.10a:
+
+compose(f, unit) == f
+
+-> definition of compose:
+a => flatMap(f(a))(unit) == a => f(a)
+
+-> replace 'f(a)' with 'x' and eliminate the 'a' argument (WHY?)
+flatMap(x)(unit) == x
+
+11.10b:
+
+compose(unit, f) == f
+
+-> definition of compose:
+a => flatMap(unit(a))(f) == a => f(a)
+
+-> replace 'a' with 'y' and remove argument
+flatMap(unit(y))(f) == f(y)
+
+
+11.11:
+
+Option monad
+
+Definitions:
+
+
+flatMap(x)(unit) == x
+flatMap(unit(y))(f) == f(y)
+
+Case None a:
+flatMap(None)(unit) == None
+
+Case Some a:
+flatMap(Some(a))(unit) == Some(a)
+unit(a) == Some(a)
+Some(a) == Some(a)
+
+Case b:
+flatMap(unit(y))(f) == f(y)
+flatMap(Some(y))(f) == f(y)
+f(y) == f(y)

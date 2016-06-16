@@ -39,6 +39,35 @@ trait Monad[M[_]] extends Functor[M] {
   def flatMapViaJoinAndMap[A, B](ma: M[A])(f: A => M[B]): M[B] = join(map(ma)(f))
 
   def composeViaJoinAndMap[A, B, C](f: A => M[B], g: B => M[C]): A => M[C] = a => join(map(f(a))(g))
+
+  /*def doWhile[A](a: M[A])(cond: A => M[Boolean]): M[Unit] = for {
+    a1 <- a
+    ok <- cond(a1)
+    _ <- if (ok) doWhile(a)(cond) else unit(())
+  } yield ()*/
+
+  /*def forever[A,B](a: M[A]): M[B] = {
+    lazy val t: M[B] = forever(a)
+    flatMap(a)(_ => t)
+  }*/
+
+  def forever[A,B](a: M[A]): M[B] = {
+    flatMap(a)(_ => forever(a))
+  }
+
+  def foldM[A,B](l: Stream[A])(z: B)(f: (B,A) => M[B]): M[B] =
+    l match {
+      case h #:: t => flatMap(f(z,h))(z2 => foldM(t)(z2)(f))
+      case _ => unit(z)
+    }
+
+  def skip[A](a: M[A]) : M[Unit] = map(a)(_ => Unit)
+
+  def foldM_[A,B](l: Stream[A])(z: B)(f: (B,A) => M[B]): M[Unit] =
+    skip { foldM(l)(z)(f) }
+
+  def foreachM[A](l: Stream[A])(f: A => M[Unit]): M[Unit] =
+    foldM_(l)(())((u,a) => skip(f(a)))
 }
 
 object SampleMonads {

@@ -1,38 +1,39 @@
-package chapter13
+package chapter13.IOTailRec
 
 import chapter11.Monad
 
 /**
   * Created by rmader on 16.06.2016.
   */
-sealed trait IOTailRec[A] {
-  def flatMap[B](f: A => IOTailRec[B]): IOTailRec[B] = FlatMap(this, f)
-  def map[B](f: A => B): IOTailRec[B] = flatMap(f andThen (Return(_)))
+sealed trait IO[A] {
+  def flatMap[B](f: A => IO[B]): IO[B] = FlatMap(this, f)
+  def map[B](f: A => B): IO[B] = flatMap(f andThen (Return(_)))
 }
-case class Return[A](a: A) extends IOTailRec[A]
-case class Suspend[A](resume: () => A) extends IOTailRec[A]
-case class FlatMap[A,B](sub: IOTailRec[A], k: A => IOTailRec[B]) extends IOTailRec[B]
+case class Return[A](a: A) extends IO[A]
+case class Suspend[A](resume: () => A) extends IO[A]
+case class FlatMap[A,B](sub: IO[A], k: A => IO[B]) extends IO[B]
 
-object IOTailRec extends Monad[IOTailRec] {
-  def unit[A](a: => A): IOTailRec[A] = new IOTailRec[A] { def run = a }
-  def flatMap[A, B](fa: IOTailRec[A])(f: A => IOTailRec[B]) = fa flatMap f
-  def apply[A](a: => A): IOTailRec[A] = unit(a)
+object IOTailRec extends Monad[IO] {
+  def unit[A](a: => A): IO[A] = new IO[A] { def run = a }
+  def flatMap[A, B](fa: IO[A])(f: A => IO[B]) = fa flatMap f
+  def apply[A](a: => A): IO[A] = unit(a)
 }
 
 object IOTailRecFunctions {
   //def ReadLine: IO[String] = IO { scala.io.StdIn.readLine }
-  def ReadLine: IOTailRec[String] = Suspend(scala.io.StdIn.readLine)
-  def PrintLine(s: String): IOTailRec[Unit] = Suspend(() => Return(println(s)))
+  def ReadLine: IO[String] = Suspend(scala.io.StdIn.readLine)
+  def PrintLine(s: String): IO[Unit] = Suspend(() => Return(println(s)))
 
-  /*@annotation.tailrec
-  def run[A](io: IOTailRec[A]): A = io match {
+  @annotation.tailrec
+  def run[A](io: IO[A]): A = io match {
     case Return(a) => a
     case Suspend(r) => r()
     case FlatMap(x, f) => x match {
       case Return(a) => run(f(a))
       case Suspend(r) => run(f(r()))
-      case FlatMap(y, g) => run(y flatMap (a => flatMap(g(a))(f)))
+      case FlatMap(y, g) => run(y flatMap (a => g(a).flatMap(f)))
     }
-  }*/
+    case _ => ??? // dummy case to silence compiler false-positive warning
+  }
 }
 

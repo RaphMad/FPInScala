@@ -1,6 +1,7 @@
 package chapter13
 
-import chapter13.IOTailRecFunctions._
+import chapter13.IOTailRec._
+import chapter13.IOTailRec.IOTailRecFunctions._
 
 object IOTailRecPrograms {
 
@@ -12,13 +13,13 @@ object IOTailRecPrograms {
 
   def fahrenheitToCelsius(f: Double): Double = (f - 32) * 5.0 / 9.0
 
-  def converter: IOTailRec[Unit] = for {
+  def converter: IO[Unit] = for {
     _ <- PrintLine("Enter a temperature in degrees Fahrenheit: ")
     d <- ReadLine.map(_.toDouble)
     _ <- PrintLine(fahrenheitToCelsius(d).toString)
   } yield ()
 
-  def converterExpanded: IOTailRec[Unit] = {
+  def converterExpanded: IO[Unit] = {
     PrintLine("Enter a temperature in degrees Fahrenheit: ").flatMap(_ => {
       ReadLine.map(line => {
         line.toDouble

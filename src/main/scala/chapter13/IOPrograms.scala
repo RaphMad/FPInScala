@@ -1,13 +1,14 @@
 package chapter13
 
-import chapter13.IOFunctions._
+import chapter13.IO._
+import chapter13.IO.IOFunctions._
 
 object IOPrograms {
 
   def main(args: Array[String]): Unit = {
     //converterExpanded.run
 
-    IO.forever(PrintLine("Still going...")).run
+    IO.IO.forever(PrintLine("Still going...")).run
   }
 
   def fahrenheitToCelsius(f: Double): Double = (f - 32) * 5.0 / 9.0

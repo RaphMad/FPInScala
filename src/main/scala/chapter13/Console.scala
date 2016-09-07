@@ -17,10 +17,15 @@ object Console {
   case object ReadLine extends Console[Option[String]] {
     def toPar = Par.lazyUnit(run)
     def toThunk = () => run
+
     def run: Option[String] =
       try Some(scala.io.StdIn.readLine())
       catch {
         case e: Exception => None
       }
   }
+
+  type ConsoleIO[A] = Free[Console, A]
+  def readLn: ConsoleIO[Option[String]] = Suspend(ReadLine)
+  def printLn(line: String): ConsoleIO[Unit] = Suspend(PrintLine(line))
 }

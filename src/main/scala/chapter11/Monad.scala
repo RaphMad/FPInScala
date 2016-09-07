@@ -106,6 +106,13 @@ object SampleMonads {
       ma flatMap f
   }
 
+  val function0Monad = new Monad[Function0] {
+    def unit[A](a: => A): Function0[A] = () => a
+
+    def flatMap[A, B](ma: Function0[A])(f: A => Function0[B]): Function0[B] =
+      f(ma())
+  }
+
   /* val stateMonad = new Monad[State(A)] {
     def unit[A](a: => A): State[A, C] = ???
 

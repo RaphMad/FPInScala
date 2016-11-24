@@ -5,6 +5,13 @@ import chapter7.Nonblocking.Par
 sealed trait Console[A] {
   def toPar: Par[A]
   def toThunk: () => A
+
+  def flatMap[B](f: A => Console[B]): Console[B] = {
+    val thunk = this.toThunk
+    val value = thunk()
+
+    f(value)
+  }
 }
 
 object Console {

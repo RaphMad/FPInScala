@@ -33,7 +33,7 @@ object RNG {
    }
 
    def nextDouble(rng: RNG): (Double, RNG) = {
-      val (num, newState) = rng.nextInt
+      val (num, newState) = rng.nonNegativeInt
       (num / (Int.MaxValue.toDouble + 1), newState)
    }
 
